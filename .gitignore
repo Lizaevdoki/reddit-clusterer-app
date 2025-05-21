@@ -1,0 +1,7 @@
+# Vermijd dat geheime data wordt mee geüpload
+.streamlit/secrets.toml
+
+# Python-specifiek
+__pycache__/
+*.py[cod]
+*.env
