@@ -179,7 +179,7 @@ if st.button("Start analysis 🚀"):
             # --- EXPORT KNOP ---
             df = parse_output_to_csv(output)
             st.markdown("### 📅 Download as CSV")
-            csv_data = df.to_csv(index=False).encode("utf-8")
+            csv_data = df.to_csv(index=False, sep=';').encode("utf-8")
             st.download_button(
                 label="📄 Download CSV",
                 data=csv_data,
