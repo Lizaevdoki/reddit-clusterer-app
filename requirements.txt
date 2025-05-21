@@ -1,3 +1,4 @@
 streamlit
 openai
 praw
+streamlit-lottie
