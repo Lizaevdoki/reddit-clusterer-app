@@ -26,9 +26,9 @@ st_lottie(lottie_chat, height=200, key="intro")
 
 st.markdown("""
 Welcome to **Reddit Recap** — your AI-powered assistant that scans Reddit comment sections  
-and organizes hundreds of opinions into **clear themes** with **real examples**.
+and organizes hundreds of opinions into **clear themes** with **detailed descriptions** and **real, full examples**.
 
-Just paste a Reddit post link and get a smart summary of what everyone’s talking about.
+Just paste a Reddit post link and get a structured summary of what everyone’s talking about.
 """)
 
 # --- AUTHENTICATIE ---
@@ -67,24 +67,24 @@ def cluster_comments_with_openai(comments, topic_description):
     all_outputs = []
     for batch in batch_comments(comments):
         batch_text = "\n".join(batch)
+
         prompt = f"""
 Je krijgt een lijst Reddit-commentaren over het onderwerp: **{topic_description}**.
 
-- Groepeer deze in duidelijke categorieën.
-- Geef elke categorie een korte naam en beschrijving.
-- Voeg 2–3 concrete voorbeelden toe per categorie.
-- Voeg een aparte categorie toe voor opvallend of vreemd gebruik.
+- Groepeer deze reacties in duidelijke categorieën.
+- Geef elke categorie een **korte, duidelijke naam**.
+- Voeg een **beschrijving toe die uitlegt waar de reacties in die categorie over gaan.**
+- Voeg vervolgens de **2 à 3 duidelijkste, volledige voorbeelden** toe (lange zinnen zijn prima).
+- Gebruik dit exacte formaat per categorie:
 
-Commentaren:
-{batch_text}
-
-Output als:
-# Categorie: naam
-Beschrijving: uitleg
-Voorbeelden:
-- voorbeeld
-- voorbeeld
+# Category: [Naam]
+Description: [Beschrijving]
+Examples:
+- voorbeeld 1
+- voorbeeld 2
+- voorbeeld 3
 """
+
         response = openai.chat.completions.create(
             model="gpt-4",
             messages=[
@@ -97,18 +97,19 @@ Voorbeelden:
 
     final_prompt = f"""
 Je krijgt hieronder meerdere AI-clusterresultaten, afkomstig van verschillende batches reacties over het onderwerp: {topic_description}.
-Vat ze samen tot een finale set categorieën, vermijd dubbelingen en zorg voor consistente structuur:
+Vat ze samen tot een finale set categorieën, vermijd dubbelingen en zorg voor consistente structuur.
+
+Gebruik dit formaat:
+# Category: [Naam]
+Description: [Beschrijving]
+Examples:
+- voorbeeld 1
+- voorbeeld 2
 
 Clusters:
 {textwrap.dedent('\n\n'.join(all_outputs))}
-
-Finale output:
-# Categorie: naam
-Beschrijving: uitleg
-Voorbeelden:
-- voorbeeld
-- voorbeeld
 """
+
     final_response = openai.chat.completions.create(
         model="gpt-4",
         messages=[
@@ -122,22 +123,32 @@ Voorbeelden:
 def parse_output_to_csv(output_text):
     rows = []
     current = {}
-    lines = output_text.strip().splitlines()
     example_count = 1
 
+    lines = output_text.strip().splitlines()
+
     for line in lines:
-        if line.startswith("# Categorie:") or line.startswith("# Category:"):
+        if line.startswith("# Category:") or line.startswith("# Categorie:"):
             if current:
                 rows.append(current)
-            current = {"Category": line.split(":", 1)[1].strip()}
+            current = {
+                "Category": line.split(":", 1)[1].strip(),
+                "Description": "",
+                "Example 1": "",
+                "Example 2": "",
+                "Example 3": ""
+            }
             example_count = 1
-        elif line.lower().startswith("beschrijving") or line.lower().startswith("description"):
+        elif line.lower().startswith("description") or line.lower().startswith("beschrijving"):
             current["Description"] = line.split(":", 1)[1].strip()
         elif line.strip().startswith("-"):
-            current[f"Example {example_count}"] = line.strip("- ").strip()
-            example_count += 1
+            if example_count <= 3:
+                current[f"Example {example_count}"] = line.strip("- ").strip()
+                example_count += 1
+
     if current:
         rows.append(current)
+
     return pd.DataFrame(rows)
 
 # --- UI INPUTVELDEN ---
@@ -167,10 +178,10 @@ if st.button("Start analysis 🚀"):
 
             # --- EXPORT KNOP ---
             df = parse_output_to_csv(output)
-            st.markdown("### 📥 Download as CSV")
+            st.markdown("### 📅 Download as CSV")
             csv_data = df.to_csv(index=False).encode("utf-8")
             st.download_button(
-                label="💾 Download CSV",
+                label="📄 Download CSV",
                 data=csv_data,
                 file_name="reddit_recap.csv",
                 mime="text/csv"
