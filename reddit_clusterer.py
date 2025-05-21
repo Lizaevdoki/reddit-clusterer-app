@@ -1,8 +1,35 @@
 import streamlit as st
-import praw
 import openai
+import praw
 import textwrap
 import re
+import pandas as pd
+import io
+import requests
+from streamlit_lottie import st_lottie
+
+# --- CONFIGURATIE ---
+st.set_page_config(page_title="Reddit Recap", page_icon="🧠", layout="centered")
+
+def load_lottieurl(url):
+    r = requests.get(url)
+    if r.status_code != 200:
+        return None
+    return r.json()
+
+lottie_chat = load_lottieurl("https://assets2.lottiefiles.com/packages/lf20_x62chJ.json")
+
+# --- TITEL & UITLEG ---
+st.title("🧠 Reddit Recap")
+st.markdown("### Instantly grasp the vibe of any Reddit thread.")
+st_lottie(lottie_chat, height=200, key="intro")
+
+st.markdown("""
+Welcome to **Reddit Recap** — your AI-powered assistant that scans Reddit comment sections  
+and organizes hundreds of opinions into **clear themes** with **real examples**.
+
+Just paste a Reddit post link and get a smart summary of what everyone’s talking about.
+""")
 
 # --- AUTHENTICATIE ---
 reddit = praw.Reddit(
@@ -15,9 +42,8 @@ reddit = praw.Reddit(
 
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# --- FUNCTIES ---
+# --- HULPFUNCTIES ---
 def extract_post_id(text):
-    """Haal de post-ID uit een Reddit-link of geef gewoon de ID terug."""
     match = re.search(r"comments/([a-z0-9]{6,})", text)
     if match:
         return match.group(1)
@@ -39,10 +65,8 @@ def batch_comments(comments, batch_size=50):
 
 def cluster_comments_with_openai(comments, topic_description):
     all_outputs = []
-
     for batch in batch_comments(comments):
         batch_text = "\n".join(batch)
-
         prompt = f"""
 Je krijgt een lijst Reddit-commentaren over het onderwerp: **{topic_description}**.
 
@@ -61,7 +85,6 @@ Voorbeelden:
 - voorbeeld
 - voorbeeld
 """
-
         response = openai.chat.completions.create(
             model="gpt-4",
             messages=[
@@ -70,7 +93,6 @@ Voorbeelden:
             ],
             temperature=0.3
         )
-
         all_outputs.append(response.choices[0].message.content)
 
     final_prompt = f"""
@@ -87,7 +109,6 @@ Voorbeelden:
 - voorbeeld
 - voorbeeld
 """
-
     final_response = openai.chat.completions.create(
         model="gpt-4",
         messages=[
@@ -96,20 +117,38 @@ Voorbeelden:
         ],
         temperature=0.3
     )
-
     return final_response.choices[0].message.content
 
-# --- STREAMLIT UI ---
-st.set_page_config(page_title="Reddit Use Case Clusterer", page_icon="🤖")
-st.title("🤖 Reddit Use Case Clusterer")
+def parse_output_to_csv(output_text):
+    rows = []
+    current = {}
+    lines = output_text.strip().splitlines()
+    example_count = 1
 
-st.markdown("Plak hieronder één of meerdere Reddit post-links of ID's, gescheiden door komma’s.")
-st.markdown("**Voorbeeld:** `https://www.reddit.com/r/Belgium2/comments/1hzjuqd/waarvoor_gebruiken_jullie_chat_gpt/`")
+    for line in lines:
+        if line.startswith("# Categorie:") or line.startswith("# Category:"):
+            if current:
+                rows.append(current)
+            current = {"Category": line.split(":", 1)[1].strip()}
+            example_count = 1
+        elif line.lower().startswith("beschrijving") or line.lower().startswith("description"):
+            current["Description"] = line.split(":", 1)[1].strip()
+        elif line.strip().startswith("-"):
+            current[f"Example {example_count}"] = line.strip("- ").strip()
+            example_count += 1
+    if current:
+        rows.append(current)
+    return pd.DataFrame(rows)
 
-post_input = st.text_input("Reddit links of ID's")
-topic_input = st.text_input("Waarover gaan de reacties?", value="hoe mensen AI gebruiken")
+# --- UI INPUTVELDEN ---
+st.markdown("### 🔗 Paste one or more Reddit links or IDs (comma-separated):")
+post_input = st.text_input("Example: https://www.reddit.com/r/Belgium2/comments/1hzjuqd/...")
 
-if st.button("Start analyse"):
+st.markdown("### 🧠 What are the comments about?")
+topic_input = st.text_input("e.g. How people use AI", value="How people use AI")
+
+# --- ACTIEKNOP ---
+if st.button("Start analysis 🚀"):
     raw_inputs = [p.strip() for p in post_input.split(",") if p.strip()]
     all_comments = []
     for raw in raw_inputs:
@@ -120,10 +159,21 @@ if st.button("Start analyse"):
             st.error(result)
 
     if all_comments:
-        st.success(f"{len(all_comments)} reacties opgehaald.")
-        with st.spinner("AI is aan het clusteren..."):
+        st.success(f"{len(all_comments)} comments fetched. Clustering in progress... 🧠")
+        with st.spinner("AI is working..."):
             output = cluster_comments_with_openai(all_comments, topic_input)
-            st.markdown("---")
+            st.markdown("### 🗂️ Recap")
             st.markdown(output)
+
+            # --- EXPORT KNOP ---
+            df = parse_output_to_csv(output)
+            st.markdown("### 📥 Download as CSV")
+            csv_data = df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="💾 Download CSV",
+                data=csv_data,
+                file_name="reddit_recap.csv",
+                mime="text/csv"
+            )
     else:
-        st.warning("Geen geldige reacties gevonden. Check je input.")
+        st.warning("No valid comments found. Please check your input.")
