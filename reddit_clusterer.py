@@ -11,10 +11,9 @@ from streamlit_lottie import st_lottie
 # --- CONFIGURATIE ---
 st.set_page_config(
     page_title="Reddit Recap",
-    page_icon="static/favicon.png",  # favicon inladen
+    page_icon="🧠",
     layout="centered"
 )
-
 
 def load_lottieurl(url):
     r = requests.get(url)
@@ -92,7 +91,7 @@ Examples:
 """
 
         response = openai.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4-turbo",
             messages=[
                 {"role": "system", "content": "Je bent een analytische AI-categorisatietool."},
                 {"role": "user", "content": prompt}
@@ -119,7 +118,7 @@ Clusters:
 """
 
     final_response = openai.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4-turbo",
         messages=[
             {"role": "system", "content": "Je bent een slimme categorisatie-assistent."},
             {"role": "user", "content": final_prompt}
@@ -153,7 +152,6 @@ def parse_output_to_csv(output_text):
     if current:
         rows.append(current)
 
-    # Zorg voor consistente kolommen gebaseerd op alle categorieën
     example_keys = [k for row in rows for k in row if k.startswith("Example")]
     max_examples = max([int(k.split()[-1]) for k in example_keys]) if example_keys else 0
     for row in rows:
@@ -181,21 +179,31 @@ if st.button("Start analysis 🚀"):
             st.error(result)
 
     if all_comments:
-        st.success(f"{len(all_comments)} comments fetched. Clustering in progress... 🧠")
-        with st.spinner("AI is working..."):
-            output = cluster_comments_with_openai(all_comments, topic_input)
-            st.markdown("### 🗂️ Recap")
-            st.markdown(output)
+        st.success(f"{len(all_comments)} comments fetched. Select your view below.")
 
-            # --- EXPORT KNOP ---
-            df = parse_output_to_csv(output)
-            st.markdown("### 📅 Download as CSV")
-            csv_data = df.to_csv(index=False, sep=';').encode("utf-8")
-            st.download_button(
-                label="📄 Download CSV",
-                data=csv_data,
-                file_name="reddit_recap.csv",
-                mime="text/csv"
-            )
+        tab1, tab2 = st.tabs(["📊 Cluster reacties", "📝 Bekijk ruwe reacties"])
+
+        with tab1:
+            with st.spinner("AI is working..."):
+                output = cluster_comments_with_openai(all_comments, topic_input)
+                st.markdown("### 🗂️ Recap")
+                st.markdown(output)
+
+                # --- EXPORT KNOP ---
+                df = parse_output_to_csv(output)
+                st.markdown("### 📅 Download as CSV")
+                csv_data = df.to_csv(index=False, sep=';').encode("utf-8")
+                st.download_button(
+                    label="📄 Download CSV",
+                    data=csv_data,
+                    file_name="reddit_recap.csv",
+                    mime="text/csv"
+                )
+
+        with tab2:
+            st.markdown("### 📃 Ruwe Reddit-commentaren")
+            with st.expander("Toon alle opgehaalde reacties"):
+                for comment in all_comments:
+                    st.write(comment)
     else:
         st.warning("No valid comments found. Please check your input.")
