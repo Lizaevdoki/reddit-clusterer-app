@@ -74,7 +74,7 @@ Je krijgt een lijst Reddit-commentaren over het onderwerp: **{topic_description}
 - Groepeer deze reacties in duidelijke categorieën.
 - Geef elke categorie een **korte, duidelijke naam**.
 - Voeg een **beschrijving toe die uitlegt waar de reacties in die categorie over gaan.**
-- Voeg vervolgens de **2 à 3 duidelijkste, volledige voorbeelden** toe (lange zinnen zijn prima).
+- Voeg vervolgens de **duidelijkste, volledige voorbeelden** toe (lange zinnen zijn prima).
 - Gebruik dit exacte formaat per categorie:
 
 # Category: [Naam]
@@ -83,6 +83,7 @@ Examples:
 - voorbeeld 1
 - voorbeeld 2
 - voorbeeld 3
+... (enzovoort indien nodig)
 """
 
         response = openai.chat.completions.create(
@@ -105,6 +106,8 @@ Description: [Beschrijving]
 Examples:
 - voorbeeld 1
 - voorbeeld 2
+- voorbeeld 3
+... (enzovoort indien nodig)
 
 Clusters:
 {textwrap.dedent('\n\n'.join(all_outputs))}
@@ -133,21 +136,24 @@ def parse_output_to_csv(output_text):
                 rows.append(current)
             current = {
                 "Category": line.split(":", 1)[1].strip(),
-                "Description": "",
-                "Example 1": "",
-                "Example 2": "",
-                "Example 3": ""
+                "Description": ""
             }
             example_count = 1
         elif line.lower().startswith("description") or line.lower().startswith("beschrijving"):
             current["Description"] = line.split(":", 1)[1].strip()
         elif line.strip().startswith("-"):
-            if example_count <= 3:
-                current[f"Example {example_count}"] = line.strip("- ").strip()
-                example_count += 1
+            current[f"Example {example_count}"] = line.strip("- ").strip()
+            example_count += 1
 
     if current:
         rows.append(current)
+
+    # Zorg voor consistente kolommen gebaseerd op alle categorieën
+    example_keys = [k for row in rows for k in row if k.startswith("Example")]
+    max_examples = max([int(k.split()[-1]) for k in example_keys]) if example_keys else 0
+    for row in rows:
+        for i in range(1, max_examples + 1):
+            row.setdefault(f"Example {i}", "")
 
     return pd.DataFrame(rows)
 
