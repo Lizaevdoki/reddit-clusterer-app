@@ -9,7 +9,12 @@ import requests
 from streamlit_lottie import st_lottie
 
 # --- CONFIGURATIE ---
-st.set_page_config(page_title="Reddit Recap", page_icon="🧠", layout="centered")
+st.set_page_config(
+    page_title="Reddit Recap",
+    page_icon="static/favicon.png",  # favicon inladen
+    layout="centered"
+)
+
 
 def load_lottieurl(url):
     r = requests.get(url)
